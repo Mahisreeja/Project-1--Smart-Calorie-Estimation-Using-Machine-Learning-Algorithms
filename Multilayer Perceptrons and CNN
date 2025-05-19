@@ -1,0 +1,78 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv1D, MaxPooling1D, Flatten
+
+# Load the dataset
+url = "/content/ObesityDataSet.csv"
+df = pd.read_csv(url)
+
+# Convert strings to numerical values
+label_encoder = LabelEncoder()
+df['NObeyesdad'] = label_encoder.fit_transform(df['NObeyesdad'])
+
+# Extract features and target variable
+X = df.drop('NObeyesdad', axis=1)
+y = df['NObeyesdad']
+
+# Convert categorical columns to one-hot vectors
+X = pd.get_dummies(X)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Standardize the data
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Multilayer Perceptrons Model
+mlp_model = MLPClassifier(hidden_layer_sizes=(100,), max_iter=1000, random_state=42)
+mlp_model.fit(X_train, y_train)
+y_pred_mlp = mlp_model.predict(X_test)
+
+# CNN Model
+X_train_cnn = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
+X_test_cnn = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+
+cnn_model = Sequential()
+cnn_model.add(Conv1D(filters=32, kernel_size=3, activation='relu', input_shape=(X_train_cnn.shape[1], 1)))
+cnn_model.add(MaxPooling1D(pool_size=2))
+cnn_model.add(Flatten())
+cnn_model.add(Dense(128, activation='relu'))
+cnn_model.add(Dense(len(label_encoder.classes_), activation='softmax'))
+
+cnn_model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+cnn_model.fit(X_train_cnn, y_train, epochs=10, batch_size=32, validation_split=0.2)
+
+y_pred_cnn_probs = cnn_model.predict(X_test_cnn)
+y_pred_cnn = y_pred_cnn_probs.argmax(axis=-1)
+
+# Evaluate models
+accuracy_mlp = accuracy_score(y_test, y_pred_mlp) * 100
+accuracy_cnn = accuracy_score(y_test, y_pred_cnn) * 100
+
+print(f"Multilayer Perceptrons Accuracy: {accuracy_mlp:.2f}%")
+print(f"CNN Accuracy: {accuracy_cnn:.2f}%")
+
+# Plot confusion matrices
+conf_matrix_mlp = confusion_matrix(y_test, y_pred_mlp)
+conf_matrix_cnn = confusion_matrix(y_test, y_pred_cnn)
+
+plt.figure(figsize=(12, 6))
+
+plt.subplot(1, 2, 1)
+sns.heatmap(conf_matrix_mlp, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+plt.title('Multilayer Perceptrons Confusion Matrix')
+
+plt.subplot(1, 2, 2)
+sns.heatmap(conf_matrix_cnn, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+plt.title('CNN Confusion Matrix')
+
+plt.show()
